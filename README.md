@@ -22,8 +22,8 @@ of languages, including elisp itself!
 
 ## Summary
 
-To use EMR when editing, simply move point to an expression and 
-`M-x emr-show-refactor-menu`.
+To use EMR when editing, simply move point to an expression and
+`M-x emr-show-refactor-menu` for completion at point, or `M-x emr-refactor` for completion in the minibuffer.
 
 ![Example][example-pic]
 
@@ -37,7 +37,11 @@ Install `emr` from [MELPA](http://www.melpa.org/), then configure your
 init.el:
 
 ```emacs-lisp
+;; Completion in the minibuffer
+(define-key prog-mode-map (kdb "M-RET") 'emr-refactor)
+;; Completion at point
 (define-key prog-mode-map (kbd "M-RET") 'emr-show-refactor-menu)
+
 ```
 
 ## Language support
