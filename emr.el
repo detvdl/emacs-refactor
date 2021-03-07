@@ -280,17 +280,21 @@ Removes the function arglist and Lisp usage example."
   "Return the hash values in hash table HT."
   (cl-loop for v being the hash-values in ht collect v))
 
+(defun emr:valid-action (struct)
+  "Test whether the refactoring specified by STRUCT is available."
+  (and
+   ;; 1. Test whether this command is available in the current
+   ;; buffer's major mode.
+   (apply 'derived-mode-p (emr-refactor-spec-modes struct))
+   ;; 2. Run the declared predicate to test whether the refactoring
+   ;; command is available in the current context.
+   (ignore-errors
+     (funcall (emr-refactor-spec-predicate struct)))))
+
 (defun emr:make-popup (struct)
   "Test whether the refactoring specified by STRUCT is available.
 Return a popup item for the refactoring menu if so."
-  (when (and
-         ;; 1. Test whether this command is available in the current
-         ;; buffer's major mode.
-         (apply 'derived-mode-p (emr-refactor-spec-modes struct))
-         ;; 2. Run the declared predicate to test whether the refactoring
-         ;; command is available in the current context.
-         (ignore-errors
-           (funcall (emr-refactor-spec-predicate struct))))
+  (when (emr:valid-action struct)
     ;; If the above tests succeed, create a popup for the
     ;; refactor menu.
     (popup-make-item (emr-refactor-spec-title struct)
@@ -300,6 +304,29 @@ Return a popup item for the refactoring menu if so."
                                  (emr:documentation
                                   (emr-refactor-spec-function struct))))))
 
+(defun emr:return-when-valid (struct)
+  "Return STRUCT when it is valid according to `emr:valid-action'."
+  (when (emr:valid-action struct)
+    struct))
+
+(defun emr:refactor-spec-title-matches (title struct)
+  "Validate whether TITLE matches the title of STRUCT."
+  (string-match-p title (emr-refactor-spec-title struct)))
+
+;;;###autoload
+(defun emr-refactor ()
+  "Show the refactor menu in minibuffer."
+  (interactive)
+  (emr-initialize)
+  (-if-let* ((valid-actions (->> emr:refactor-commands
+                                 (emr:hash-values)
+                                 (-keep 'emr:return-when-valid)))
+             (action-titles (cl-mapcar 'emr-refactor-spec-title valid-actions)))
+      (let* ((action-title (completing-read "refactor: " action-titles))
+             (action (car (cl-member action-title valid-actions :test #'emr:refactor-spec-title-matches))))
+        (call-interactively (emr-refactor-spec-function action)))
+    (message "No refactorings available")))
+
 ;;;###autoload
 (defun emr-show-refactor-menu ()
   "Show the refactor menu at point."
@@ -308,8 +335,8 @@ Return a popup item for the refactoring menu if so."
   ;; Run each factory function and collect the menu items representing
   ;; available commands.
   (-if-let (actions (->> emr:refactor-commands
-                      (emr:hash-values)
-                      (-keep 'emr:make-popup)))
+                         (emr:hash-values)
+                         (-keep 'emr:make-popup)))
       ;; Display the menu.
       (atomic-change-group
         (-when-let (action (popup-menu*
